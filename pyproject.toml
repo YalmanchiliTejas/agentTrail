@@ -4,7 +4,7 @@ requires = ["hatchling>=1.18.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentTrail"
+name = "agentRelay"
 version = "0.1.0"
 description = "Framework-agnostic transactional agent runtime with idempotent tool calls, saga compensations, and deterministic replay."
 readme = "README.md"
@@ -54,4 +54,4 @@ Repository = "https://github.com/YalmanchiliTejas/agenttrail"
 Issues = "https://github.com/YalmanchiliTejas/agenttrail/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["agent_trail"]
+packages = ["agent_relay"]
