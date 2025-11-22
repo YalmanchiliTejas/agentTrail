@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Framework-agnostic transactional agent runtime with idempotent tool calls, saga compensations, and deterministic replay."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = { file = "LICENSE.txt" }
 
 authors = [
   { name = "Tejas Yalamanchili" }
