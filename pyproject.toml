@@ -1,0 +1,57 @@
+```toml
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentTrail"
+version = "0.1.0"
+description = "Framework-agnostic transactional agent runtime with idempotent tool calls, saga compensations, and deterministic replay."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+
+authors = [
+  { name = "Tejas Yalamanchili" }
+]
+
+keywords = [
+  "ai",
+  "agents",
+  "workflow",
+  "saga",
+  "idempotency",
+  "llm",
+  "orchestration",
+]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: System :: Distributed Computing",
+]
+
+dependencies = [
+  "sqlalchemy>=2.0.0",
+  "pymysql>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "mypy>=1.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YalmanchiliTejas/agenttrail"
+Repository = "https://github.com/YalmanchiliTejas/agenttrail"
+Issues = "https://github.com/YalmanchiliTejas/agenttrail/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_trail"]
