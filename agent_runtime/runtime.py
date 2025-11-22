@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
+import hashlib
 
 from .db import Database
 from .context import get_current_session, set_current_session
@@ -20,8 +21,8 @@ def _deserialize_json(data: Any) -> Any:
     return data
 @dataclass
 class ExecutedStep:
-    toolname: str
-    compensation_toolname: Optional[str]
+    tool_name: str
+    compensation_tool_name: Optional[str]
     args:tuple
     kwargs:dict
 
@@ -45,6 +46,32 @@ class AgentRuntime:
         return self.tools[name]
     def agent_session(self, name: str, input_payload: Any|None = None, replay:bool=False, replay_run_id: Optional[str] = None)->"AgentSession":
         return AgentSession(runtime=self, name = name, input_payload=input_payload, replay=replay, replay_run_id=replay_run_id)
+    def replay_run(
+        self,
+        name: str,
+        run_id: str,
+        agent_fn: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """
+        Deterministically re-run an agent function using the recorded tool_calls
+        for `run_id`.
+
+        - Opens an AgentSession in replay mode.
+        - All decorated tool calls are served from the tool_calls table
+          via AgentSession._replay_step instead of re-invoking the real tools.
+        """
+        with self.agent_session(
+            name=name,
+            input_payload={"replay_of": run_id},
+            replay=True,
+            replay_run_id=run_id,
+        ) as session:
+            result = agent_fn(*args, **kwargs)
+            session.set_output(result)
+            # We return whatever the agent function produced
+            return result
 @dataclass
 class AgentSession:
     runtime: AgentRuntime
@@ -171,6 +198,7 @@ class AgentSession:
             raise RuntimeError("AgentSession has no run_id; did you use it as a context manager?")
 
         if self.replay:
+            print(f"[REPLAY MODE] serving {tool_name}/{phase} from DB")
             return self._replay_step(tool_name, phase)
 
         idem_key = self._compute_idempotency_key(tool_name, args, kwargs, phase)
@@ -279,7 +307,8 @@ class AgentSession:
         # simple deterministic JSON then hash
         json_str = json.dumps(payload, sort_keys=True, default=repr)
         # you can swap in a real hash; for MVP string is fine
-        return json_str
+        digest = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+        return digest
 
     def _replay_step(self, tool_name: str, phase: str) -> Any:
         if self._replay_index >= len(self._replay_calls):

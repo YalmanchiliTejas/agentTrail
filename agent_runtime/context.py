@@ -4,7 +4,7 @@ from contextvars import ContextVar
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .agentRuntime import AgentSession
+    from .runtime import AgentSession
 
 _current_session: ContextVar[Optional["AgentSession"]] = ContextVar(
     "_current_agent__seesion", default=None
