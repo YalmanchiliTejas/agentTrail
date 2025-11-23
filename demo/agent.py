@@ -6,8 +6,8 @@ from typing import Any, Dict
 
 from google import genai  # pip install google-genai
 
-from agent_runtime.runtime import AgentRuntime
-from agent_runtime.tooling import tool
+from agent_relay.runtime import AgentRuntime
+from agent_relay.tooling import tool
 import argparse
 
 # -------------------------------------------------------------------
