@@ -44,3 +44,9 @@ Once published to PyPI:
 
 ```bash
 pip install agentrelay
+```
+---
+## Coming soon:
+- ** Documentation
+- ** An online dashboard for effective debugging
+- ** A cloud version (so no need of setup on your end, just call the library with the API and get going!)
