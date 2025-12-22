@@ -5,14 +5,21 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 import hashlib
-
+from sqlalchemy import IntegrityError
+import time
 from .db import Database
 from .context import get_current_session, set_current_session
 
 ToolCall = Callable[..., Any]
 
 def _serialize_json(data: Any) -> str:
-    return json.dumps(data)
+    if data is None or isinstance(data, (bool, int, float, str)):
+            return data
+    if isinstance(data, (list, tuple)):
+            return [_serialize_json(x) for x in data]
+    if isinstance(data, dict):
+            return {str(k): _serialize_json(v) for k, v in data.items()}
+    return {"__non_json__": True, "type": type(data).__name__, "repr": repr(data)}
 
 def _deserialize_json(data: Any) -> Any:
 
@@ -33,7 +40,7 @@ class AgentRuntime:
     compensations: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def from_conection_string(cls, conn_str: str) -> "AgentRuntime":
+    def from_connection_string(cls, conn_str: str) -> "AgentRuntime":
         db = Database.from_connection_string(conn_str)
         return cls(db=db)
     def register_tool(self, name: str, func: ToolCall) -> None:
@@ -203,57 +210,73 @@ class AgentSession:
 
         idem_key = self._compute_idempotency_key(tool_name, args, kwargs, phase)
 
-        # check for existing successful call (idempotency)
-        existing = self.runtime.db.fetchone(
-            """
-            SELECT output_json
-            FROM tool_calls
-            WHERE run_id = :run_id
-              AND tool_name = :tool_name
-              AND idempotency_key = :idem
-              AND phase = :phase
-              AND status = 'success'
-            """,
-            {
-                "run_id": self.run_id,
-                "tool_name": tool_name,
-                "idem": idem_key,
-                "phase": phase,
-            },
-        )
-        if existing:
-            output = json.loads(existing.output_json)
-            return _deserialize_json(output)
+        # Insert and check in order to preserve atomicity in case of concurrent runs
 
-        # new call
-        self.seq_no += 1
+        next_seq_no = self.seq_no + 1
         call_id = str(uuid.uuid4())
         now = datetime.utcnow()
 
-        self.runtime.db.execute(
-            """
-            INSERT INTO tool_calls (
-                id, run_id, seq_no, tool_name, idempotency_key,
-                phase, status, input_json, created_at, updated_at
+        try:
+            self.runtime.db.execute(
+                """
+                INSERT INTO tool_calls (
+                    id, run_id, seq_no, tool_name, idempotency_key,
+                    phase, status, input_json, created_at, updated_at
+                )
+                VALUES (
+                    :id, :run_id, :seq_no, :tool_name, :idem,
+                    :phase, :status, :input_json, :created_at, :updated_at
+                )
+                """,
+                {
+                    "id": call_id,
+                    "run_id": self.run_id,
+                    "seq_no": next_seq_no,
+                    "tool_name": tool_name,
+                    "idem": idem_key,
+                    "phase": phase,
+                    "status": "pending",
+                    "input_json": json.dumps(_serialize_json({"args": args, "kwargs": kwargs})),
+                    "created_at": now,
+                    "updated_at": now,
+                },
             )
-            VALUES (
-                :id, :run_id, :seq_no, :tool_name, :idem,
-                :phase, :status, :input_json, :created_at, :updated_at
+            self.seq_no = next_seq_no  # only increment if we actually claimed
+        except IntegrityError as e:
+            
+            row = self.runtime.db.fetchone(
+                """
+                SELECT status, output_json, error
+                FROM tool_calls
+                WHERE run_id = :run_id
+                AND tool_name = :tool_name
+                AND idempotency_key = :idem
+                AND phase = :phase
+                """,
+                {"run_id": self.run_id, "tool_name": tool_name, "idem": idem_key, "phase": phase},
             )
-            """,
-            {
-                "id": call_id,
-                "run_id": self.run_id,
-                "seq_no": self.seq_no,
-                "tool_name": tool_name,
-                "idem": idem_key,
-                "phase": phase,
-                "status": "pending",
-                "input_json": json.dumps(_serialize_json({"args": args, "kwargs": kwargs})),
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
+
+            if row and row.status == "success":
+                out = _deserialize_json(output = json.loads(row.output_json))
+                return out
+            #polling in order to reduce flakiness
+            for _ in range(10):
+                row = self.runtime.db.fetchone(
+                    """
+                    SELECT status, output_json, error
+                    FROM tool_calls
+                    WHERE run_id = :run_id
+                    AND tool_name = :tool_name
+                    AND idempotency_key = :idem
+                    AND phase = :phase
+                    """,
+                    {"run_id": self.run_id, "tool_name": tool_name, "idem": idem_key, "phase": phase},
+                )
+                if row and row.status == "success":
+                    return _deserialize_json(output=json.loads(row.output_json))
+                if row and row.status == "error":
+                    raise RuntimeError(f"Prior attempt failed: {row.error}")
+                time.sleep(0.1)
 
         if phase == "forward":
             self.executed_steps.append(

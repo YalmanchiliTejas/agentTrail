@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from .runtime import AgentSession
 
 _current_session: ContextVar[Optional["AgentSession"]] = ContextVar(
-    "_current_agent__seesion", default=None
+    "_current_agent_session", default=None
 )
 
 def get_current_session() -> Optional["AgentSession"]:
