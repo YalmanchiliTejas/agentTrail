@@ -139,7 +139,7 @@ The `demo/agent.py` script shows saga compensation, idempotency, and replay patt
 
 ---
 
-## Coming soon
+## Cloud version
 
-- **An online dashboard for effective debugging**
+- https://agent-relay-website.vercel.app/
 - **A cloud version (so no need of setup on your end, just call the library with the API and get going!)**
